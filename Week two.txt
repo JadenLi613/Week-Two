@@ -1,0 +1,109 @@
+USE [IndustryConnectWeek2]
+GO
+
+/****** Object:  UserDefinedFunction [dbo].[GetCustomerAmount] ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE FUNCTION [dbo].[GetCustomerAmount] (@CustomerId INT)
+RETURNS MONEY
+AS
+BEGIN
+    RETURN (SELECT SUM(price) FROM CustomerSales WHERE [Customer Id] = @CustomerId);
+END
+GO
+
+/****** Object:  UserDefinedFunction [dbo].[CalculateAge] ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE FUNCTION [dbo].[CalculateAge] (@DateOfBirth DATE)
+RETURNS INT
+AS
+BEGIN
+    RETURN DATEDIFF(YEAR, @DateOfBirth, GETDATE()) - 
+           CASE WHEN (MONTH(@DateOfBirth) > MONTH(GETDATE())) OR 
+                     (MONTH(@DateOfBirth) = MONTH(GETDATE()) AND DAY(@DateOfBirth) > DAY(GETDATE())) 
+                THEN 1 ELSE 0 END;
+END;
+GO
+
+/****** Object:  Table [dbo].[Customer] ******/
+CREATE TABLE [dbo].[Customer] (
+    [Id] INT IDENTITY(1,1) PRIMARY KEY,
+    [FirstName] NVARCHAR(30) NULL,
+    [LastName] NVARCHAR(40) NULL,
+    [DateOfBirth] DATETIME NULL
+);
+GO
+
+/****** Object:  Table [dbo].[Product] ******/
+CREATE TABLE [dbo].[Product] (
+    [Id] INT IDENTITY(1,1) PRIMARY KEY,
+    [Name] NVARCHAR(100) NULL,
+    [Description] NVARCHAR(MAX) NULL,
+    [Active] BIT NULL,
+    [Price] MONEY NULL
+);
+GO
+
+/****** Object:  Table [dbo].[Store] ******/
+CREATE TABLE [dbo].[Store] (
+    [Id] INT IDENTITY(1,1) PRIMARY KEY,
+    [Name] NVARCHAR(100) NOT NULL,
+    [Location] NVARCHAR(200) NOT NULL
+);
+GO
+
+INSERT INTO [dbo].[Store] (Name, Location) VALUES 
+('Auckland Central Store', 'Auckland CBD'),
+('Manukau Store', 'Manukau City'),
+('North Shore Store', 'Albany');
+GO
+
+/****** Object:  Table [dbo].[Sale] ******/
+CREATE TABLE [dbo].[Sale] (
+    [Id] INT IDENTITY(1,1) PRIMARY KEY,
+    [CustomerId] INT NULL,
+    [ProductId] INT NULL,
+    [DateSold] DATETIME NULL,
+    [StoreId] INT NULL,
+    CONSTRAINT [FK_Sale_Customer] FOREIGN KEY ([CustomerId]) REFERENCES [dbo].[Customer] ([Id]),
+    CONSTRAINT [FK_Sale_Product] FOREIGN KEY ([ProductId]) REFERENCES [dbo].[Product] ([Id]),
+    CONSTRAINT [FK_Sale_Store] FOREIGN KEY ([StoreId]) REFERENCES [dbo].[Store] ([Id])
+);
+GO
+
+/****** Object:  View [dbo].[CustomerSales] ******/
+CREATE VIEW [dbo].[CustomerSales]
+AS
+SELECT 
+    c.Id AS 'Customer Id',
+    c.FirstName,
+    c.LastName,
+    CONCAT(c.FirstName, ' ', c.LastName) AS 'Full Name',
+    s.DateSold,
+    p.[Name] AS 'Product Name',
+    p.Price,
+    [dbo].[GetCustomerAmount](c.Id) AS 'Total Purchases'
+FROM Customer c
+LEFT JOIN Sale s ON c.Id = s.CustomerId
+LEFT JOIN Product p ON s.ProductId = p.Id;
+GO
+
+/****** Object:  StoredProcedure [dbo].[InsertProduct] ******/
+CREATE PROCEDURE [dbo].[InsertProduct] @Name NVARCHAR(100), @Price MONEY
+AS
+BEGIN
+    INSERT INTO [dbo].[Product] ([Name], Price, Active)
+    VALUES (@Name, @Price, 1);
+END;
+GO
+
+/****** Updating Existing Sales to Default Store ******/
+UPDATE [dbo].[Sale] 
+SET StoreId = 1 
+WHERE StoreId IS NULL;
+GO
